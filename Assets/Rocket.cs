@@ -5,16 +5,15 @@ using UnityEngine.SceneManagement;
 
 public class Rocket : MonoBehaviour
 {
+    [SerializeField] float loadLevelDelay = 2f;
+    [SerializeField] float rotateSpeed = 100f, thrustSpeed = 100f;
+    [SerializeField] AudioClip audioThrust, audioDead, audioWin;
+    [SerializeField] bool collisionDebugOn = false;
+    [SerializeField] ParticleSystem particleThrust, particleDead, particleWin;
 
-    [SerializeField]
-    float rotateSpeed = 100f;
-    [SerializeField]
-    float thrustSpeed = 100f;
-
-    int currentLevel = 0;
     enum State { Alive, Dying, Transcending }
     State state = State.Alive;
-    Collision collision;
+
     Rigidbody rigidBody;
     AudioSource audioSource;
 
@@ -30,13 +29,16 @@ public class Rocket : MonoBehaviour
     {
         if (state == State.Alive)
         {
-            Rotate();
-            Thrust();
+            RespondToRotateInput();
+            RespondToThrustInput();
+            if(Debug.isDebugBuild)//When the game is published, it will be false so that debug keys won't be used
+                RespondToDebugInput();
         }
-    }
+    }    
+
     void OnCollisionEnter(Collision collision)
     {
-        if (state != State.Alive)
+        if (state != State.Alive || collisionDebugOn)
             return;
         switch (collision.gameObject.tag)
         {
@@ -44,30 +46,57 @@ public class Rocket : MonoBehaviour
                 //do nothing
                 break;
             case "Finish":
-                state = State.Transcending; //to make control unable
-                Invoke("LoadNextLevel", 2f);//After 2 seconds load next scene
+                Transcending();
                 break;
             default:
-                audioSource.Stop();
-                state = State.Dying; //to make control unable
-                Invoke("LoadFirstLevel", 2f);
+                Dying();
                 break;
-
         }
-
     }
 
+    private void RespondToDebugInput()
+    {
+        if (Input.GetKeyDown(KeyCode.C))
+            collisionDebugOn = !collisionDebugOn;
+        else if (Input.GetKeyDown(KeyCode.L))
+            LoadNextLevel();
+    }
+    private void Transcending()
+    {
+        audioSource.Stop();
+        particleThrust.Stop();
+        audioSource.PlayOneShot(audioWin);
+        particleWin.Play();
+        state = State.Transcending; //to make control unable
+        Invoke("LoadNextLevel", loadLevelDelay);
+    }
+    private void Dying()
+    {
+        rigidBody.constraints = RigidbodyConstraints.None;
+        audioSource.Stop();
+        particleThrust.Stop();
+        audioSource.PlayOneShot(audioDead);
+        particleDead.Play();
+        state = State.Dying; //to make control unable
+        Invoke("LoadFirstLevel", loadLevelDelay);
+    }
     private void LoadFirstLevel()
     {
         SceneManager.LoadScene(0);
     }
-
     private void LoadNextLevel()
     {
-        SceneManager.LoadScene(++currentLevel);
-    }
+        //SceneManager.GetActiveScene().buildIndex + 1 is the index of next level
+        /*
+        if (SceneManager.GetActiveScene().buildIndex + 1 != SceneManager.sceneCountInBuildSettings)
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
+        else
+            SceneManager.LoadScene(0);        */
 
-    private void Rotate()
+        //The better way is to divide index of next level by number of levels
+        SceneManager.LoadScene((SceneManager.GetActiveScene().buildIndex + 1) % SceneManager.sceneCountInBuildSettings);
+    }
+    private void RespondToRotateInput()
     {
         rigidBody.freezeRotation = true;
         float rotateFPS = rotateSpeed * Time.deltaTime;
@@ -77,16 +106,25 @@ public class Rocket : MonoBehaviour
             transform.Rotate(-Vector3.forward * rotateFPS);
         rigidBody.freezeRotation = false;
     }
-    private void Thrust()
+    private void RespondToThrustInput()
     {
         float thrustFPS = thrustSpeed * Time.deltaTime;
+
+        if (Input.GetKeyDown(KeyCode.UpArrow))
+        {
+            audioSource.PlayOneShot(audioThrust);
+            particleThrust.Play();
+        }
+
         if (Input.GetKey(KeyCode.UpArrow))
         {
             rigidBody.AddRelativeForce(Vector3.up * thrustFPS);
         }
         else
+        {
+            particleThrust.Stop();
             audioSource.Stop();
-        if (Input.GetKeyDown(KeyCode.UpArrow))
-            audioSource.Play();
+        }
+        
     }
 }
