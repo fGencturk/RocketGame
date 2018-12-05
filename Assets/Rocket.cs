@@ -124,7 +124,6 @@ public class Rocket : MonoBehaviour
         {
             particleThrust.Stop();
             audioSource.Stop();
-        }
-        
+        }        
     }
 }
